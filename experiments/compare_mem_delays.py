@@ -1,4 +1,4 @@
-"""Axonal/synaptic/hybrid memorization experiment; all measurements use training data.
+"""Axonal/synaptic/hybrid comparison on one selected delay pathway; all measurements use training data.
 
 Run: .venv/bin/python experiments/compare_mem_delays.py
 """
@@ -16,11 +16,22 @@ from delrec.training.mem import set_epoch
 from delrec.utils import reset_states, seed_everything
 
 
-def matched_models(config):
+def matched_models(config, pathway="recurrent"):
     """Match weights and initial functions; synaptic delays subsequently untie."""
+    suffixes = {'recurrent': 'recurrent_only_delays',
+                'feedforward': 'feedforward_only_delays'}
+    if pathway not in suffixes:
+        raise ValueError('pathway must be recurrent or feedforward')
+    suffix = suffixes[pathway]
+    config = deepcopy(config)
+    if pathway == 'recurrent':
+        # Existing recurrent classes honor this flag; the comparison needs
+        # recurrence in every hidden layer, including a single-hidden-layer run.
+        config.no_recurrence_in_last_layer = False
     ax_config, sy_config = deepcopy(config), deepcopy(config)
-    ax_config.model = 'SNN_axonal_recurrent_and_feedforward_delays'
-    sy_config.model = 'SNN_synaptic_recurrent_and_feedforward_delays'
+    ax_config.delay_pathway = sy_config.delay_pathway = pathway
+    ax_config.model = f'SNN_axonal_{suffix}'
+    sy_config.model = f'SNN_synaptic_{suffix}'
     seed_everything(config.seed)
     ax = getattr(networks, ax_config.model)(ax_config)
     sy = getattr(networks, sy_config.model)(sy_config)
@@ -52,7 +63,8 @@ def matched_models(config):
         reset_states(ax)
         reset_states(sy)
     hy_config = deepcopy(config)
-    hy_config.model = 'SNN_hybrid_recurrent_and_feedforward_delays'
+    hy_config.delay_pathway = pathway
+    hy_config.model = f'SNN_hybrid_{suffix}'
     hy = getattr(networks, hy_config.model)(hy_config)
     # Copy common weights/biases and the learned base delays. Fixed offsets are
     # retained: hybrid starts with different effective delays by design.
@@ -79,12 +91,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('epochs', 'seed', 'dataset-seed', 'num-samples', 'hybrid-max-synaptic-delay', 'hybrid-delay-seed'):
         parser.add_argument('--' + name, type=int)
+    parser.add_argument('--pathway', choices=['recurrent', 'feedforward'], default='recurrent')
     parser.add_argument('--task-type', choices=['temporal', 'spatial'])
     parser.add_argument('--hidden-layers', help='Comma-separated widths')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     args = parser.parse_args()
     config = Config()
+    config.delay_pathway = args.pathway
     for key in ('epochs', 'seed', 'dataset_seed', 'num_samples', 'task_type', 'hybrid_max_synaptic_delay', 'hybrid_delay_seed'):
         if getattr(args, key) is not None:
             setattr(config, key, getattr(args, key))
@@ -94,9 +108,9 @@ def main():
         parser.error('Epochs, samples and layer widths must be positive')
     torch.set_num_threads(config.cpu_threads)
     out = args.out or ROOT / 'exp' / 'MEM' / 'delay_comparison' / (
-        f'{config.task_type}_seed{config.seed}_{datetime.now():%Y-%m-%d-%H-%M-%S-%f}')
+        f'{args.pathway}_{config.task_type}_seed{config.seed}_{datetime.now():%Y-%m-%d-%H-%M-%S-%f}')
     out.mkdir(parents=True, exist_ok=True)
-    pair = matched_models(config)
+    pair = matched_models(config, pathway=args.pathway)
     print('Axonal/synaptic initial outputs matched; hybrid shares base parameters plus fixed random offsets.', flush=True)
     results = {}
     histories = {}
@@ -136,7 +150,7 @@ def plot_comparison(histories, results, config, out):
     bars = axes[2].bar(labels, values, color=['tab:blue', 'tab:orange', 'tab:green'])
     axes[2].bar_label(bars, labels=[f'{v:.2f}%' for v in values], padding=4)
     axes[2].set(ylabel='Accuracy (%)', title='Final training accuracy', ylim=(0, 110))
-    fig.suptitle(f'Axonal / synaptic / hybrid delays on both pathways | {config.task_type}, '
+    fig.suptitle(f'Axonal / synaptic / hybrid — {config.delay_pathway} delays only | {config.task_type}, '
                  f'{config.num_samples} samples, topology {config.input_size} → '
                  + ' → '.join(map(str, config.hidden_layers + [config.output_size])))
     for extension in ('png', 'pdf'):
