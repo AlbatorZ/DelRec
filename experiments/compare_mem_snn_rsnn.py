@@ -77,7 +77,7 @@ def main():
                        'hybrid-max-synaptic-delay', 'hybrid-delay-seed')
     for name in integer_options:
         parser.add_argument('--' + name, type=int)
-    parser.add_argument('--task-type', choices=['temporal', 'spatial'])
+    parser.add_argument('--task-type', choices=['temporal', 'spatial'], default = 'temporal')
     parser.add_argument('--hidden-layers')
     parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     parser.add_argument('--out', type=Path)

@@ -92,7 +92,7 @@ def main():
     for name in ('epochs', 'seed', 'dataset-seed', 'num-samples', 'hybrid-max-synaptic-delay', 'hybrid-delay-seed'):
         parser.add_argument('--' + name, type=int)
     parser.add_argument('--pathway', choices=['recurrent', 'feedforward'], default='recurrent')
-    parser.add_argument('--task-type', choices=['temporal', 'spatial'])
+    parser.add_argument('--task-type', choices=['temporal', 'spatial'], default = 'temporal')
     parser.add_argument('--hidden-layers', help='Comma-separated widths')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
