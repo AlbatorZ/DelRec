@@ -111,6 +111,14 @@ is set; this preserves their existing topology.
 
 ## Six configurations: delay location × delay type
 
+For an editable Kaggle version, open
+[`notebooks/compare_mem_snn_rsnn.ipynb`](../notebooks/compare_mem_snn_rsnn.ipynb).
+It includes the configuration, matching, training and plotting code; only library
+components are imported from the repository. Enable a GPU and Internet for setup,
+then run all cells. For subsequent experiments, edit and rerun Configuration,
+Run comparison and Plot comparison. The checkout is reused, CUDA is selected
+automatically when available, and outputs are saved under `/kaggle/working/exp/MEM/`.
+
 ```bash
 .venv/bin/python experiments/compare_mem_snn_rsnn.py
 ```
