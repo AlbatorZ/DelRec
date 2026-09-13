@@ -3,13 +3,20 @@
 import torch
 from torch.nn import functional as F
 
-from delrec.delay_layers import axonal_recdel
+from delrec.delay_layers import axonal_recdel, vanilla_recurrent
 from delrec.networks import dcls_module, learned_delay_parameter
 from delrec.training.al import get_dcls_sigma_for_epoch
 from delrec.utils import reset_states
 
 
 def make_optimizer(model, config):
+    # Classify actual layers, including synaptic/hybrid subclasses and vanilla
+    # recurrence. Combined recurrent + feedforward delay networks use rec rates.
+    family = ('recurrent' if any(isinstance(m, (axonal_recdel, vanilla_recurrent))
+                                for m in model.modules()) else 'feedforward')
+    # Preserve effective values in the config saved alongside each checkpoint.
+    config.lr_w = getattr(config, f'lr_w_{family}', config.lr_w)
+    config.lr_positions = getattr(config, f'lr_positions_{family}', config.lr_positions)
     positions = []
     for module in model.modules():
         if isinstance(module, axonal_recdel):

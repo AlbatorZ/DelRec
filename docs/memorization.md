@@ -40,6 +40,20 @@ Recurrent smoothing uses the configured sigma schedule. Delays are clamped after
 each update and remain fractional; measurements preserve the current smoothing
 and positions, without rounding or a separate inference-time transformation.
 
+MEM learning rates are selected from the model's actual layers:
+
+| Network family | Weight rate | Delay rate |
+| --- | --- | --- |
+| Recurrent (including hybrid and combined-delay networks) | `lr_w_recurrent = 0.001` | `lr_positions_recurrent = 0.01` |
+| Feedforward | `lr_w_feedforward = 0.005` | `lr_positions_feedforward = 0.08` |
+
+Edit these four fields in `perf_MEM.py` or the notebook Configuration cell.
+The selected weight rate applies to every trainable weight in the model,
+including input/output projections. Axonal, synaptic and hybrid variants within
+a family share the same rates. Each saved config records the effective rates as
+`lr_w` and `lr_positions`; older configs without family-specific fields still use
+those original fields. The same selection applies to standalone `train_mem.py`.
+
 Each run writes to a unique `exp/MEM/<model>/...` directory, or `--out PATH`:
 
 - `config.json`: effective settings and device.

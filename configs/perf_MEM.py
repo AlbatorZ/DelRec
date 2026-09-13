@@ -72,6 +72,12 @@ class Config:
     init_pos_b = max_feedforward_delay // 2
     siginit = 1.0  # scheduled to 0.23 in the first half of training
 
+    # Rates apply to all weights/delays in the selected network family.
+    lr_w_recurrent = 0.001
+    lr_positions_recurrent = 0.01
+    lr_w_feedforward = 0.005
+    lr_positions_feedforward = 0.08
+    # Legacy fallback; make_optimizer records the selected effective rates here.
     lr_w = 0.005
     lr_positions = 0.08
     weight_decay = 0.0
