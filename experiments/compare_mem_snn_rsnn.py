@@ -8,35 +8,10 @@ from datetime import datetime
 import json
 from pathlib import Path
 
-from compare_mem_delays import matched_models
-from train_mem import ROOT, Config, networks, run, torch, plt
+from train_mem import ROOT, Config, run, torch, plt
 from delrec.delay_layers import axonal_recdel
+from delrec.comparison import six_models
 from delrec.networks import dcls_module, learned_delay_parameter
-
-
-def six_models(config):
-    """Delay location × delay type; match connection weights across locations."""
-    recurrent = matched_models(config, pathway='recurrent')
-    feedforward = matched_models(config, pathway='feedforward')
-    models = []
-    for kind, (rc, rec), (fc, ff) in zip(
-            ('Axonal', 'Synaptic', 'Hybrid'), recurrent, feedforward, strict=True):
-        # All projections have the same connectivity, but their delay operators
-        # differ. Match connection weights/biases without copying delay tensors.
-        rec_projections = [m for m in rec.layers if isinstance(m, torch.nn.Linear)]
-        ff_projections = [m for m in ff.layers if isinstance(m, torch.nn.Linear)
-                          or (isinstance(m, dcls_module) and m.weight.requires_grad)]
-        with torch.no_grad():
-            for source, target in zip(rec_projections, ff_projections, strict=True):
-                target.weight.copy_(source.weight.unsqueeze(-1)
-                                    if isinstance(target, dcls_module) else source.weight)
-                if target.bias is not None:
-                    target.bias.copy_(source.bias)
-        assert not any(isinstance(m, dcls_module) for m in rec.modules())
-        assert not any(isinstance(m, axonal_recdel) for m in ff.modules())
-        models.extend([(f'Recurrent {kind}', rc, rec),
-                       (f'Feedforward {kind}', fc, ff)])
-    return models
 
 
 def plot_comparison(histories, results, config, out):
@@ -69,7 +44,6 @@ def plot_comparison(histories, results, config, out):
     for extension in ('png', 'pdf'):
         fig.savefig(out / f'delay_location_comparison.{extension}', dpi=180)
     plt.close(fig)
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

@@ -42,6 +42,10 @@ the import path, so run the commands below from the repository root.
 Triton is optional: the layers are plain PyTorch and run without it, only slower.
 [docs/installation.md](docs/installation.md)
 
+For the six-model HAR comparison (axonal, hybrid and synaptic delays on
+feedforward or recurrent connections), see [docs/har_comparison.md](docs/har_comparison.md).
+It includes the RTX 5060 Ti setup, run commands, parameter counts and saved plots.
+
 ## Reproduce the paper
 
 Every figure and table, with no GPU, no dataset and no download:

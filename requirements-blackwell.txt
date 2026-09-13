@@ -1,0 +1,26 @@
+# Separate Linux/Windows environment for RTX 50-series GPUs.
+# PyTorch 2.7 introduced Blackwell support with CUDA 12.8 wheels:
+# https://pytorch.org/blog/pytorch-2-7/
+# Keep requirements.txt unchanged for reproducing the original environment.
+# torch selects its matching Triton dependency on supported Linux systems.
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+DCLS==0.1.1
+h5py==3.11.0
+matplotlib==3.10.0
+numpy==1.26.4
+opt_einsum==3.4.0
+pandas==2.2.3
+prettytable==3.5.0
+scikit-learn==1.6.1
+scipy==1.15.3
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+tqdm==4.67.1
+urllib3==2.2.1
+
+# spikingjelly 0.0.0.0.15 was never released to PyPI, whose newest is 0.0.0.0.14
+# with a substantially different neuron.py. This is the upstream commit whose
+# sources match the installed copy that produced every number here, byte for byte.
+spikingjelly @ git+https://github.com/fangwei123456/spikingjelly.git@d4fee3a1715bf42ce15f52fde1b1d4709d7ea25e
+

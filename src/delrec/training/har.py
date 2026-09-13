@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 
 from delrec.delay_layers import axonal_recdel
-from delrec.networks import dcls_module, modified_batchnorm, spike_registrator
+from delrec.networks import dcls_module, learned_delay_parameter, modified_batchnorm, spike_registrator
 from delrec.utils import *
 
 def get_dcls_sigma_for_epoch(config, epoch: int):
@@ -190,21 +190,28 @@ def init_optim_sche(model, config):
             weights.append(m.recurrent_weights)
             if getattr(m, 'use_rec_bias', False):
                 weights.append(m.recurrent_bias)
-            positions.append(m.recurrent_delays)
+            positions.append(learned_delay_parameter(m, 'recurrent_delays'))
 
             if hasattr(m, 'p_spread'):
                 positions.append(m.p_spread)
 
         elif isinstance(m, dcls_module):
             weights.append(m.weight)
-            if config.bias:
+            if m.bias is not None:
                 weights.append(m.bias)
-            positions.append(m.P)
+            positions.append(learned_delay_parameter(m, 'P'))
+            # Gaussian widths are scheduled in train(), never optimized.
+            if m.SIG is not None:
+                m.SIG.requires_grad_(False)
 
         elif isinstance(m, modified_batchnorm):
             weights_norm.append(m.weight)
             if config.bias:
                 weights_norm.append(m.bias)
+
+    weights = [p for p in weights if p.requires_grad]
+    weights_norm = [p for p in weights_norm if p.requires_grad]
+    positions = [p for p in positions if p.requires_grad]
 
     optimizer = []
     scheduler = []
