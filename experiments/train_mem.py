@@ -27,6 +27,7 @@ from configs.perf_MEM import Config
 from delrec import networks
 from delrec.datasets.spike_memorization import SpikeMemorization
 from delrec.delay_layers import axonal_recdel
+from delrec.training.delay_diagnostics import DelayDiagnostics
 from delrec.training.mem import make_optimizer, run_epoch, set_epoch
 from delrec.utils import seed_everything
 
@@ -99,13 +100,19 @@ def run(config, device, out=None, model=None):
     (run_dir / "config.json").write_text(json.dumps(settings, indent=2))
     torch.save({"inputs": dataset.inputs, "labels": dataset.labels}, run_dir / "dataset.pt")
     print(f"Device: {device}; model: {config.model}; output: {run_dir}", flush=True)
+    diagnostics = DelayDiagnostics(model, run_dir,
+                                   every=getattr(config, "delay_diagnostics_every", 10),
+                                   show=False)
+    diagnostics.snapshot()
     history = []
     with (run_dir / "train_res.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=["epoch", "loss", "accuracy_percent", "online_loss"])
         writer.writeheader()
         for epoch in range(config.epochs):
             set_epoch(model, config, epoch)
-            online = run_epoch(loader, model, device, config, optimizer)
+            diagnostics.begin_epoch(epoch + 1, config.epochs)
+            online = run_epoch(loader, model, device, config, optimizer, diagnostics=diagnostics)
+            diagnostics.snapshot()
             # Preserve fractional delays and the training-time smoothing for measurement.
             final = run_epoch(measure_loader, model, device, config)
             row = {"epoch": epoch + 1, "loss": final["loss"],

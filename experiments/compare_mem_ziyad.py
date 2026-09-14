@@ -15,7 +15,7 @@ models therefore start from identical initial outputs (asserted); the hybrids
 keep their own fixed random offsets, so they start from different effective
 delays by design.
 
-Run: .venv/bin/python experiments/compare_mem_delays.py
+Run: .venv/bin/python experiments/compare_mem_ziyad.py
 """
 
 import argparse
@@ -176,7 +176,7 @@ def matched_models(config):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('epochs', 'seed', 'dataset-seed', 'num-samples', 'hybrid-max-synaptic-delay', 'hybrid-delay-seed'):
+    for name in ('epochs', 'seed', 'dataset-seed', 'num-samples', 'hybrid-max-synaptic-delay', 'hybrid-delay-seed', 'delay-diagnostics-every'):
         parser.add_argument('--' + name, type=int)
     parser.add_argument('--task-type', choices=['temporal', 'spatial'])
     parser.add_argument('--hidden-layers', help='Comma-separated widths')
@@ -184,13 +184,13 @@ def main():
     parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     args = parser.parse_args()
     config = Config()
-    for key in ('epochs', 'seed', 'dataset_seed', 'num_samples', 'task_type', 'hybrid_max_synaptic_delay', 'hybrid_delay_seed'):
+    for key in ('epochs', 'seed', 'dataset_seed', 'num_samples', 'task_type', 'hybrid_max_synaptic_delay', 'hybrid_delay_seed', 'delay_diagnostics_every'):
         if getattr(args, key) is not None:
             setattr(config, key, getattr(args, key))
     if args.hidden_layers:
         config.hidden_layers = [int(n) for n in args.hidden_layers.split(',')]
-    if min(config.epochs, config.num_samples, *config.hidden_layers) < 1:
-        parser.error('Epochs, samples and layer widths must be positive')
+    if min(config.delay_diagnostics_every, config.epochs, config.num_samples, *config.hidden_layers) < 1:
+        parser.error('Diagnostic interval, epochs, samples and layer widths must be positive')
     torch.set_num_threads(config.cpu_threads)
     out = args.out or ROOT / 'exp' / 'MEM' / 'delay_comparison' / (
         f'{config.task_type}_seed{config.seed}_{datetime.now():%Y-%m-%d-%H-%M-%S-%f}')

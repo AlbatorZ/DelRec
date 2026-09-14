@@ -20,6 +20,7 @@ class Config:
     input_gain = 1.0
     hidden_layers = [64]
     epochs = 100
+    delay_diagnostics_every = 10  # snapshots at 0, every X epochs, and final
     batch_size = 64
     num_workers = 0
     cpu_threads = 1
