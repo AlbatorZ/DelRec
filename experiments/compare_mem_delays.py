@@ -18,8 +18,8 @@ from delrec.utils import reset_states, seed_everything
 
 def matched_models(config, pathway="recurrent"):
     """Match weights and initial functions; synaptic delays subsequently untie."""
-    suffixes = {'recurrent': 'recurrent_only_delays',
-                'feedforward': 'feedforward_only_delays'}
+    suffixes = {'recurrent': 'recurrent_delays',
+                'feedforward': 'feedforward_delays'}
     if pathway not in suffixes:
         raise ValueError('pathway must be recurrent or feedforward')
     suffix = suffixes[pathway]
@@ -30,7 +30,8 @@ def matched_models(config, pathway="recurrent"):
         config.no_recurrence_in_last_layer = False
     ax_config, sy_config = deepcopy(config), deepcopy(config)
     ax_config.delay_pathway = sy_config.delay_pathway = pathway
-    ax_config.model = f'SNN_axonal_{suffix}'
+    ax_config.model = ('SNN_axonal_recurrent_delays' if pathway == 'recurrent'
+                       else f'SNN_axonal_{suffix}')
     sy_config.model = f'SNN_synaptic_{suffix}'
     seed_everything(config.seed)
     ax = getattr(networks, ax_config.model)(ax_config)

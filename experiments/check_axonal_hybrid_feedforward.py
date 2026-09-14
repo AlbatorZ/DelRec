@@ -26,7 +26,7 @@ from spikingjelly.activation_based import functional, neuron, surrogate
 
 from delrec.delay_layers import axonal_recdel
 from delrec.networks import (
-    SNN_axonal_feedforward_only_delays,
+    SNN_axonal_feedforward_delays,
     SNN_hybrid_feedforward_delays,
     dcls_module,
     learned_delay_parameter,
@@ -60,7 +60,7 @@ def main():
     if config.hybrid_max_synaptic_delay < 0:
         parser.error("The maximum hybrid offset must be nonnegative")
     check_equivalence = config.hybrid_max_synaptic_delay == 0
-    axonal = SNN_axonal_feedforward_only_delays(deepcopy(config))
+    axonal = SNN_axonal_feedforward_delays(deepcopy(config))
     hybrid = SNN_hybrid_feedforward_delays(deepcopy(config))
     for model in (axonal, hybrid):
         assert not any(isinstance(m, axonal_recdel) for m in model.modules())
