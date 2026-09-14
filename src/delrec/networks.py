@@ -869,16 +869,16 @@ class _HybridDelayMixin:
         return logs
 
 
-class SNN_hybrid_recurrent_delays(_HybridDelayMixin, SNN_synaptic_recurrent_delays):
+class SNN_recurrent_hybrid_delays(_HybridDelayMixin, SNN_synaptic_recurrent_delays):
     """Existing recurrent synaptic network with learned axonal bases + fixed offsets."""
 
 
-class SNN_hybrid_feedforward_only_delays(_HybridDelayMixin, SNN_feedforward_delays):
+class SNN_hybrid_feedforward_delays(_HybridDelayMixin, SNN_feedforward_delays):
     """Existing dense FF delay network with learned axonal bases + fixed offsets."""
 
 
 # Compatibility names used by the comparison: reuse existing implementations.
 SNN_axonal_recurrent_only_delays = SNN_recurrent_delays
 SNN_synaptic_recurrent_only_delays = SNN_synaptic_recurrent_delays
-SNN_hybrid_recurrent_only_delays = SNN_hybrid_recurrent_delays
+SNN_hybrid_recurrent_only_delays = SNN_recurrent_hybrid_delays
 SNN_synaptic_feedforward_only_delays = SNN_feedforward_delays

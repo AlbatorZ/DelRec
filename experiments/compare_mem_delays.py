@@ -64,7 +64,8 @@ def matched_models(config, pathway="recurrent"):
         reset_states(sy)
     hy_config = deepcopy(config)
     hy_config.delay_pathway = pathway
-    hy_config.model = f'SNN_hybrid_{suffix}'
+    hy_config.model = ('SNN_recurrent_hybrid_delays' if pathway == 'recurrent'
+                       else 'SNN_hybrid_feedforward_delays')
     hy = getattr(networks, hy_config.model)(hy_config)
     # Copy common weights/biases and the learned base delays. Fixed offsets are
     # retained: hybrid starts with different effective delays by design.

@@ -145,7 +145,7 @@ delays on both pathways.
 | --- | --- | --- |
 | Axonal | `SNN_axonal_recurrent_only_delays` | `SNN_axonal_feedforward_only_delays` |
 | Synaptic | `SNN_synaptic_recurrent_only_delays` | `SNN_synaptic_feedforward_only_delays` |
-| Hybrid | `SNN_hybrid_recurrent_only_delays` | `SNN_hybrid_feedforward_only_delays` |
+| Hybrid | `SNN_hybrid_recurrent_only_delays` | `SNN_hybrid_feedforward_delays` |
 
 Recurrent-only blocks are `Linear → Dropout → recurrent LIF → recorder →
 [BatchNorm]`, with a final Linear output projection. They contain no DCLS
