@@ -116,7 +116,8 @@ def run(config, device, out=None, model=None):
             # Preserve fractional delays and the training-time smoothing for measurement.
             final = run_epoch(measure_loader, model, device, config)
             perfect_accuracy = final["correct"] == final["num_samples"]
-            diagnostics.snapshot(force=perfect_accuracy)
+            diagnostics.snapshot(force=perfect_accuracy,
+                                 rounded=perfect_accuracy or epoch + 1 == config.epochs)
             row = {"epoch": epoch + 1, "loss": final["loss"],
                    "accuracy_percent": final["accuracy_percent"], "online_loss": online["loss"]}
             history.append(row)

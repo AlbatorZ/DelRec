@@ -80,10 +80,24 @@ class DelayDiagnostics:
         return tensor.detach().float().cpu().numpy().reshape(-1).copy()
 
     @torch.no_grad()
-    def snapshot(self, force=False):
+    def snapshot(self, force=False, rounded=False):
+        # Heatmaps track the actual training trajectory, before final rounding.
         self.record_hidden_delays()
         if not (self.active or force) or not self.layers:
             return
+        if not rounded:
+            return self._plot_snapshot(rounded=False)
+        # Use the network's own hybrid-aware rounding/clamping implementation.
+        # Restore even if plotting fails; optimizer updates remain pre-rounding.
+        saved = [(parameter, parameter.detach().clone()) for _, _, _, parameter in self.layers]
+        try:
+            self.model.round_pos()
+            self._plot_snapshot(rounded=True)
+        finally:
+            for parameter, value in saved:
+                parameter.copy_(value)
+
+    def _plot_snapshot(self, rounded):
         import matplotlib.pyplot as plt
 
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -99,7 +113,8 @@ class DelayDiagnostics:
             values = {'parameter': self._array(parameter), 'effective_delay': self._array(effective)}
             for key in ('gradient', 'delta'):
                 values[key] = np.concatenate(record[key]) if record[key] else np.array([], dtype=np.float32)
-            summary[name] = {'missing_grad_steps': record['missing_grad_steps']}
+            summary[name] = {'missing_grad_steps': record['missing_grad_steps'],
+                             'delays_rounded': rounded}
             titles = ('Learned P (DCLS position)' if attribute == 'P' else 'Learned recurrent delay',
                       'Effective delay (timesteps)', '|Gradient| (before clipping)',
                       '|Actual step| (after clamping)')
@@ -114,6 +129,12 @@ class DelayDiagnostics:
                     plotted = np.abs(finite) if key in ('gradient', 'delta') else finite
                     if key in ('gradient', 'delta'):
                         bins = 50
+                    elif rounded:
+                        # Unit-width bins centered on integer delays/positions.
+                        bins = np.arange(np.floor(plotted.min()),
+                                         np.ceil(plotted.max()) + 2) - 0.5
+                        from matplotlib.ticker import MaxNLocator
+                        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
                     else:
                         # Retain the sqrt(N) rule, with widths rounded up to
                         # multiples of 0.5 and edges on the half-integer grid.
@@ -134,6 +155,8 @@ class DelayDiagnostics:
                 ax.set(title=title, xlabel='Value', ylabel=f'{name}\nCount')
                 ax.grid(alpha=.2)
         phase = 'initial' if self.epoch == 0 else f'epoch {self.epoch}'
+        if rounded:
+            phase += ' (final delays rounded; gradients/updates from training)'
         fig.suptitle(f'{type(self.model).__name__} — {phase}\nUpdates pooled across minibatches of this epoch')
         stem = self.directory / f'epoch_{self.epoch:05d}'
         np.savez_compressed(stem.with_suffix('.npz'), **arrays)
