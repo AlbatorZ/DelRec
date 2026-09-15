@@ -28,6 +28,7 @@ from train_mem import ROOT, Config, networks, run, torch, plt
 from delrec.delay_layers import axonal_recdel
 from delrec.networks import dcls_module, learned_delay_parameter
 from delrec.training.mem import set_epoch
+from delrec.training.run_recap import save_training_recap
 from delrec.utils import reset_states, seed_everything
 
 
@@ -196,6 +197,10 @@ def main():
         f'{config.task_type}_seed{config.seed}_{datetime.now():%Y-%m-%d-%H-%M-%S-%f}')
     out.mkdir(parents=True, exist_ok=True)
     models = matched_models(config)
+    recap = save_training_recap(
+        [(label, cfg, model) for (label, _, _), (cfg, model)
+         in zip(MODELS, models, strict=True)], args.device, out)
+    print(recap, flush=True)
     print('Per pathway group: axonal/synaptic initial outputs matched; hybrids keep their own fixed offsets.', flush=True)
     results = {}
     histories = {}
