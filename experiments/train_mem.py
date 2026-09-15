@@ -110,26 +110,34 @@ def run(config, device, out=None, model=None):
         writer.writeheader()
         for epoch in range(config.epochs):
             set_epoch(model, config, epoch)
-            diagnostics.begin_epoch(epoch + 1, config.epochs)
+            # Retain this epoch's updates in case it becomes the early-stop epoch.
+            diagnostics.begin_epoch(epoch + 1, config.epochs, capture_all=True)
             online = run_epoch(loader, model, device, config, optimizer, diagnostics=diagnostics)
-            diagnostics.snapshot()
             # Preserve fractional delays and the training-time smoothing for measurement.
             final = run_epoch(measure_loader, model, device, config)
+            perfect_accuracy = final["correct"] == final["num_samples"]
+            diagnostics.snapshot(force=perfect_accuracy)
             row = {"epoch": epoch + 1, "loss": final["loss"],
                    "accuracy_percent": final["accuracy_percent"], "online_loss": online["loss"]}
             history.append(row)
             writer.writerow(row)
             stream.flush()
             scheduler.step()
-            if epoch == 0 or (epoch + 1) % 10 == 0 or epoch + 1 == config.epochs:
+            if epoch == 0 or (epoch + 1) % 10 == 0 or epoch + 1 == config.epochs or perfect_accuracy:
                 print(f"Epoch {epoch + 1}/{config.epochs}: loss={final['loss']:.6f}, "
                       f"training accuracy={final['accuracy_percent']:.2f}%", flush=True)
-    final.update(epoch=config.epochs, model=config.model, seed=config.seed,
+            if perfect_accuracy:
+                print(f"Stopping at epoch {epoch + 1}: training accuracy reached 100%.", flush=True)
+                break
+    completed_epochs = epoch + 1
+    final.update(epoch=completed_epochs, stopped_early=completed_epochs < config.epochs,
+                 stop_reason="perfect_training_accuracy" if perfect_accuracy else "max_epochs",
+                 model=config.model, seed=config.seed,
                  dataset_seed=config.dataset_seed, task_type=config.task_type,
                  trainable_parameters=sum(p.numel() for p in model.parameters() if p.requires_grad))
     (run_dir / "final_train.json").write_text(json.dumps(final, indent=2))
     torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
-                "scheduler": scheduler.state_dict(), "epoch": config.epochs,
+                "scheduler": scheduler.state_dict(), "epoch": completed_epochs,
                 "config": settings, "metrics": final,
                 "recurrent_sigmas": {name: m.sigma for name, m in model.named_modules()
                                      if isinstance(m, axonal_recdel)}}, run_dir / "last.pth")

@@ -47,8 +47,9 @@ class DelayDiagnostics:
         self.active = False
         self.begin_epoch(0, 0)
 
-    def begin_epoch(self, epoch, final_epoch):
+    def begin_epoch(self, epoch, final_epoch, capture_all=False):
         self.active = epoch == 0 or epoch == final_epoch or epoch % self.every == 0
+        self.capture = self.active or capture_all
         self.epoch = epoch
         self.updates = {name: {'gradient': [], 'delta': [], 'missing_grad_steps': 0}
                         for name, *_ in self.layers}
@@ -56,7 +57,7 @@ class DelayDiagnostics:
     @torch.no_grad()
     def before_step(self):
         """Capture raw gradients and parameters after backward, before clipping."""
-        if not self.active:
+        if not self.capture:
             return
         self.before = {}
         for name, _, _, parameter in self.layers:
@@ -69,7 +70,7 @@ class DelayDiagnostics:
 
     @torch.no_grad()
     def after_step(self):
-        if self.active:
+        if self.capture:
             for name, _, _, parameter in self.layers:
                 self.updates[name]['delta'].append(self._array(parameter - self.before[name]))
             self.before = {}
@@ -79,9 +80,9 @@ class DelayDiagnostics:
         return tensor.detach().float().cpu().numpy().reshape(-1).copy()
 
     @torch.no_grad()
-    def snapshot(self):
+    def snapshot(self, force=False):
         self.record_hidden_delays()
-        if not self.active or not self.layers:
+        if not (self.active or force) or not self.layers:
             return
         import matplotlib.pyplot as plt
 

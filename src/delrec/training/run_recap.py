@@ -49,6 +49,7 @@ def save_training_recap(models, device, out):
     for category, key, value in (
         ('Execution', 'device', device), ('Execution', 'output directory', Path(out)),
         ('Training', 'optimizer', 'AdamW'),
+        ('Training', 'stopping rule', '100% full training-set accuracy, or maximum epochs'),
         ('Training', 'learning-rate scheduler', 'CosineAnnealingLR; T_max = epochs; eta_min = 0'),
         ('Training', 'objective', 'Cross-entropy; training-set-only loss and accuracy'),
         ('Training', 'batches', 'Shuffled training; deterministic measurement order'),
