@@ -15,6 +15,12 @@ models therefore start from identical initial outputs (asserted); the hybrids
 keep their own fixed random offsets, so they start from different effective
 delays by design.
 
+Architecture flags are honored: no_delay_in_first_layer removes input delays,
+no_delay_in_last_layer removes output delays, and no_recurrence_in_last_layer
+removes the last hidden recurrence. no_recurrent_delays selects the same vanilla
+RSNN (fixed zero delays, no hybrid offsets) for all three recurrent runs, retaining
+connections in the enabled hidden layers.
+
 Run: .venv/bin/python experiments/compare_mem_ziyad.py
 """
 
@@ -106,7 +112,7 @@ def _inject(model, canon):
     fi = ri = 0
     with torch.no_grad():
         for m in model.layers:
-            if isinstance(m, dcls_module) and m.weight.shape[1] == 1:
+            if isinstance(m, dcls_module) and not m.weight.requires_grad:
                 # Depthwise delay filter: per-source delay, unit weights left frozen.
                 # The projection's Linear follows and advances `fi`.
                 learned_delay_parameter(m, 'P').copy_(
@@ -142,11 +148,9 @@ def _inject(model, canon):
 def matched_models(config):
     """Build the six models, all seeded from one global reference."""
     config = deepcopy(config)
-    assert not config.no_delay_in_first_layer and not config.no_delay_in_last_layer, \
-        'the reference needs a delay filter on every feedforward projection'
-    # The recurrent-only models honour this flag; generate_matched_parameters ignores
-    # it. Force recurrence in every hidden layer so they match the reference.
-    config.no_recurrence_in_last_layer = False
+    # Generate the full reference even for disabled pathways: this keeps shared
+    # weights identical across flag settings. _inject copies only existing modules;
+    # Linear projections still advance fi, and only the final recurrence can be absent.
 
     seed_everything(config.seed)
     canon = generate_matched_parameters(config)
@@ -154,9 +158,17 @@ def matched_models(config):
     built = {}
     for label, _slug, class_name in MODELS:
         cfg = deepcopy(config)
-        cfg.model = class_name
-        model = getattr(networks, class_name)(cfg)
+        cfg.model = ('SNN_vanilla_recurrent'
+                     if label.startswith('Recurrent') and getattr(cfg, 'no_recurrent_delays', False)
+                     else class_name)
+        model = getattr(networks, cfg.model)(cfg)
         _inject(model, canon)
+        if cfg.model == 'SNN_vanilla_recurrent':
+            # Injection also copies delay tensors; restore the vanilla control.
+            with torch.no_grad():
+                for module in model.layers:
+                    if isinstance(module, axonal_recdel):
+                        module.recurrent_delays.zero_()
         set_epoch(model, cfg, 0)
         model.eval()
         built[label] = (cfg, model)
@@ -179,12 +191,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('epochs', 'seed', 'dataset-seed', 'num-samples', 'hybrid-max-synaptic-delay', 'hybrid-delay-seed', 'delay-diagnostics-every'):
         parser.add_argument('--' + name, type=int)
+    flag_names = ('no_delay_in_first_layer', 'no_delay_in_last_layer',
+                  'no_recurrence_in_last_layer', 'no_recurrent_delays')
+    for name in flag_names:
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument('--' + name.replace('_', '-'), dest=name,
+                           action='store_true', default=None)
+        group.add_argument('--' + name.removeprefix('no_').replace('_', '-'),
+                           dest=name, action='store_false')
     parser.add_argument('--task-type', choices=['temporal', 'spatial'])
     parser.add_argument('--hidden-layers', help='Comma-separated widths')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     args = parser.parse_args()
     config = Config()
+    for name in flag_names:
+        if getattr(args, name) is not None:
+            setattr(config, name, getattr(args, name))
     for key in ('epochs', 'seed', 'dataset_seed', 'num_samples', 'task_type', 'hybrid_max_synaptic_delay', 'hybrid_delay_seed', 'delay_diagnostics_every'):
         if getattr(args, key) is not None:
             setattr(config, key, getattr(args, key))
@@ -201,7 +224,8 @@ def main():
         [(label, cfg, model) for (label, _, _), (cfg, model)
          in zip(MODELS, models, strict=True)], args.device, out)
     print(recap, flush=True)
-    print('Per pathway group: axonal/synaptic initial outputs matched; hybrids keep their own fixed offsets.', flush=True)
+    print('Per pathway group: axonal/synaptic initial outputs matched. '
+          'Architecture flags apply; zero-delay recurrent runs use identical vanilla RSNNs.', flush=True)
     results = {}
     histories = {}
     for (label, slug, _class_name), (cfg, model) in zip(MODELS, models, strict=True):
@@ -220,7 +244,9 @@ def main():
                           '(feedforward weights/biases and axonal delays, recurrent '
                           'weights/biases and axonal delays). Within each pathway group '
                           'axonal and synaptic start from identical outputs; hybrids add '
-                          'fixed random synaptic offsets before training.',
+                          'fixed random synaptic offsets on enabled delay pathways. '
+                          'Architecture flags are honored; no_recurrent_delays selects '
+                          'identical vanilla RSNNs with fixed zero delays for recurrent runs.',
         'results': results,
     }, indent=2))
     plot_comparison(histories, results, config, out)
@@ -249,6 +275,8 @@ def plot_comparison(histories, results, config, out):
     axes[2].tick_params(axis='x', labelrotation=30, labelsize=8)
     for tick in axes[2].get_xticklabels():
         tick.set_ha('right')
+    if getattr(config, 'no_recurrent_delays', False):
+        axes[0].set_title('Training loss (recurrent runs: identical zero-delay RSNNs)')
     fig.suptitle(f'Delay parametrization x pathway (3 x 2) | {config.task_type}, '
                  f'{config.num_samples} samples, topology {config.input_size} → '
                  + ' → '.join(map(str, config.hidden_layers + [config.output_size])))

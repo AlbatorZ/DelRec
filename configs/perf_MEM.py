@@ -35,6 +35,7 @@ class Config:
     no_delay_in_first_layer = False
     no_delay_in_last_layer = False
     no_recurrence_in_last_layer = False
+    no_recurrent_delays = False  # Ziyad comparison: keep recurrence, fix delays to zero
 
     neuron_module = neuron.LIFNode
     surrogate_function = surrogate.ATan(alpha=2.0)

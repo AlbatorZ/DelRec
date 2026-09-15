@@ -10,7 +10,7 @@ _GROUPS = {
     'Data': 'dataset task_type num_samples input_size time_window output_size input_gain dataset_seed',
     'Training': 'epochs batch_size readout seed grad_clip weight_decay',
     'Learning rates (configured)': 'lr_w lr_positions lr_w_recurrent lr_positions_recurrent lr_w_feedforward lr_positions_feedforward',
-    'Architecture': 'hidden_layers bias use_batch_norm feedforward_dropout_rate recurrent_dropout_rate no_delay_in_first_layer no_delay_in_last_layer no_recurrence_in_last_layer',
+    'Architecture': 'hidden_layers bias use_batch_norm feedforward_dropout_rate recurrent_dropout_rate no_delay_in_first_layer no_delay_in_last_layer no_recurrence_in_last_layer no_recurrent_delays',
     'Neuron': 'neuron_module surrogate_function tau decay_input v_threshold v_reset detach_reset step_mode backend store_v_seq',
     'Initialization': 'init_ff_weights init_dcls_weights init_rec_weights init_rec_delay rec_delay_init_gain init_recdel_offset delay_std_init',
     'Recurrent delays': 'max_rec_delay use_rec_bias use_sig_p sigma_init sigma_decay round_delays',
