@@ -133,6 +133,7 @@ def run(config, device, out=None, model=None):
                 "config": settings, "metrics": final,
                 "recurrent_sigmas": {name: m.sigma for name, m in model.named_modules()
                                      if isinstance(m, axonal_recdel)}}, run_dir / "last.pth")
+    diagnostics.plot_hidden_delay_evolution()
     plot_results(history, final, config, run_dir)
     print(f"Final training accuracy: {final['accuracy_percent']:.2f}%\nSaved: {run_dir}", flush=True)
 

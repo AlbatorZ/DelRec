@@ -10,9 +10,10 @@ import json
 
 import numpy as np
 import torch
+from torch.nn.utils import parametrize
 
 from delrec.delay_layers import axonal_recdel
-from delrec.networks import dcls_module, learned_delay_parameter
+from delrec.networks import dcls_module, learned_delay_parameter, spike_registrator
 
 
 class DelayDiagnostics:
@@ -30,6 +31,19 @@ class DelayDiagnostics:
             if attribute:
                 self.layers.append((name, module, attribute,
                                     learned_delay_parameter(module, attribute)))
+        # A feedforward delay belongs to its source neurons: the first stage
+        # delays inputs, while the final projection delays the last hidden layer.
+        self.hidden_delays = []
+        hidden_index = 0
+        for name, module in getattr(model, 'layers', torch.nn.Sequential()).named_children():
+            if isinstance(module, spike_registrator):
+                hidden_index += 1
+            elif isinstance(module, axonal_recdel):
+                self.hidden_delays.append((f'Hidden {hidden_index + 1} recurrent', module))
+            elif isinstance(module, dcls_module) and hidden_index > 0:
+                self.hidden_delays.append((f'Hidden {hidden_index} feedforward', module))
+        self.delay_epochs = []
+        self.delay_history = []
         self.active = False
         self.begin_epoch(0, 0)
 
@@ -66,6 +80,7 @@ class DelayDiagnostics:
 
     @torch.no_grad()
     def snapshot(self):
+        self.record_hidden_delays()
         if not self.active or not self.layers:
             return
         import matplotlib.pyplot as plt
@@ -119,3 +134,78 @@ class DelayDiagnostics:
         plt.close(fig)
         # Release pooled arrays as soon as they have been saved.
         self.updates = {}
+
+
+    @torch.no_grad()
+    def record_hidden_delays(self):
+        """Hybrid axonal delay only; synaptic delays averaged over targets/kernels."""
+        if not self.hidden_delays:
+            return
+        values = []
+        for _, module in self.hidden_delays:
+            if isinstance(module, axonal_recdel):
+                delay = learned_delay_parameter(module, 'recurrent_delays')
+                if delay.ndim == 2:
+                    delay = delay.mean(dim=0)  # (target, source)
+            else:
+                position = learned_delay_parameter(module, 'P')
+                if parametrize.is_parametrized(module, 'P'):
+                    # Keep the recentering for the widened hybrid kernel, but
+                    # omit fixed offsets: lag then equals the base axonal lag.
+                    position = position + module.parametrizations.P[0].position_shift
+                delay = module.left_padding - (module.dilated_kernel_size[0] - 1) / 2 - position
+                if module.groups == module.in_channels == module.out_channels:
+                    # Depthwise DCLS: (1, source, 1, kernel).
+                    delay = delay.mean(dim=(0, 2, 3))
+                else:
+                    # Dense/hybrid DCLS: (1, target, source, kernel).
+                    delay = delay.mean(dim=(0, 1, 3))
+            values.append(self._array(delay))
+        if self.delay_epochs and self.delay_epochs[-1] == self.epoch:
+            self.delay_history[-1] = values
+        else:
+            self.delay_epochs.append(self.epoch)
+            self.delay_history.append(values)
+
+    def plot_hidden_delay_evolution(self):
+        """Save one heatmap per model run, with a common color scale for all epochs."""
+        if not self.delay_history:
+            return
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import MaxNLocator
+
+        self.directory.mkdir(parents=True, exist_ok=True)
+        blocks = [np.stack([epoch[i] for epoch in self.delay_history], axis=1)
+                  for i in range(len(self.hidden_delays))]
+        data = np.concatenate(blocks, axis=0)
+        epochs = np.asarray(self.delay_epochs)
+        fig, ax = plt.subplots(figsize=(12, max(4, 2 * len(blocks))), layout='constrained')
+        mesh = ax.pcolormesh(np.r_[epochs - .5, epochs[-1] + .5],
+                             np.arange(data.shape[0] + 1) - .5,
+                             np.ma.masked_invalid(data), cmap='viridis', shading='flat')
+        ax.invert_yaxis()
+        ax.set(xlabel='Completed epoch (0 = initial)', ylabel='Hidden neuron index',
+               title=f'{type(self.model).__name__}\nOutgoing delay per hidden neuron (hybrid: axonal only; synaptic: mean)')
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        offset = 0
+        metadata = []
+        for (label, _), block in zip(self.hidden_delays, blocks):
+            metadata.append({'layer': label, 'row_start': offset, 'neuron_count': block.shape[0]})
+            if len(blocks) > 1:
+                ax.text(1.01, offset + (block.shape[0] - 1) / 2, label,
+                        transform=ax.get_yaxis_transform(), va='center', fontsize=8)
+                if offset:
+                    ax.axhline(offset - .5, color='white', linewidth=1)
+            offset += block.shape[0]
+        fig.colorbar(mesh, ax=ax, label='Delay (timesteps)', pad=.2 if len(blocks) > 1 else .02)
+        stem = self.directory / 'hidden_delay_evolution'
+        fig.savefig(stem.with_suffix('.png'), dpi=180)
+        np.savez_compressed(stem.with_suffix('.npz'), epochs=epochs, delays=data)
+        stem.with_suffix('.json').write_text(json.dumps({
+            'aggregation': 'Hybrid: learned axonal delay only, excluding fixed offsets; synaptic: mean outgoing delay over targets and kernels',
+            'rows': metadata,
+        }, indent=2))
+        if self.show:
+            plt.show()
+        plt.close(fig)
