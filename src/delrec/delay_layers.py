@@ -249,6 +249,15 @@ class synaptic_recdel(SynapticTorchScans, SynapticTritonScans, axonal_recdel):
                     "the pure-PyTorch event-driven reference was removed from this "
                     "release, use 'eventdriven' (the CUDA default), 'v2' or 'v1'.")
             elif fv == 'eventdriven':
+                # Hybrid delays share one learned base per source. Use their
+                # fused delay-gradient kernel when supported; explicit v1/v2
+                # selections above/below still use the requested reference path.
+                if getattr(self, '_hybrid_delay', False):
+                    from delrec.triton_kernels.synaptic_hybrid import (
+                        hybrid_kernel_usable, hybrid_trainable_forward,
+                    )
+                    if hybrid_kernel_usable(self, x_seq):
+                        return hybrid_trainable_forward(self, x_seq)
                 return self.multi_step_forward_eventdriven(x_seq)
             # A fused Triton scan loses to v2's cuBLAS-per-step GEMM for per-synapse
             # delays. The spike-sparse fast path is multi_step_forward_eventdriven.
@@ -273,4 +282,3 @@ class common_recdel(axonal_recdel):
         self.recurrent_delays = torch.nn.Parameter(torch.zeros(1), requires_grad=True)
         self.init_recurrent_delays()   # half_normal/uniform both work on shape (1,)
         self.forward_version = 'v2'    # broadcast-safe path
-

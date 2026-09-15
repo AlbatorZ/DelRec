@@ -740,8 +740,10 @@ def _reparametrize_recurrent_delay(module, maximum, generator):
     ``forward_version`` is left unset and the module is tagged ``_hybrid_delay`` so
     ``synaptic_recdel.forward`` routes it: on CUDA to the dedicated fused hybrid
     Triton path (``delrec.triton_kernels.synaptic_hybrid``) when that is usable,
-    to the spike-sparse event-driven kernel when the regime is unsupported, and to
-    the pure-torch ``v2`` scan on CPU or if the fused kernel ever fails at runtime.
+    to the spike-sparse event-driven kernel when the hybrid-specific gate declines,
+    and to the pure-torch ``v2`` scan on CPU or with ``decay_input=True``.
+    Explicit ``forward_version`` selections are respected. Kernel errors propagate,
+    including errors raised later during backward.
     """
     from torch.nn.utils import parametrize
     offsets = _draw_offsets(module.recurrent_delays.shape, maximum, generator)
