@@ -112,7 +112,16 @@ class DelayDiagnostics:
                                  mean_abs=float(np.abs(finite).mean()), max_abs=float(np.abs(finite).max()),
                                  zero_fraction=float((finite == 0).mean()))
                     plotted = np.abs(finite) if key in ('gradient', 'delta') else finite
-                    bins = 50 if key in ('gradient', 'delta') else int(np.ceil(np.sqrt(plotted.size)))
+                    if key in ('gradient', 'delta'):
+                        bins = 50
+                    else:
+                        # Retain the sqrt(N) rule, with widths rounded up to
+                        # multiples of 0.5 and edges on the half-integer grid.
+                        target_bins = int(np.ceil(np.sqrt(plotted.size)))
+                        width = max(0.5, np.ceil(np.ptp(plotted) / target_bins / 0.5) * 0.5)
+                        left = np.floor(plotted.min() * 2) / 2
+                        count = max(1, int(np.ceil((plotted.max() - left) / width)))
+                        bins = left + np.arange(count + 1) * width
                     ax.hist(plotted, bins=bins)
                     if key in ('gradient', 'delta'):
                         ax.set_yscale('log')
