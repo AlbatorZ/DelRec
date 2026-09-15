@@ -71,10 +71,10 @@ def run_epoch(loader, model, device, config, optimizer=None, diagnostics=None):
                 raise RuntimeError("Non-finite memorization loss")
             if training:
                 loss.backward()
+                if diagnostics is not None:
+                    diagnostics.before_step()
                 if config.grad_clip > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
-                if diagnostics is not None:
-                    diagnostics.before_step(optimizer)
                 optimizer.step()
                 if hasattr(model, "clamp_delays"):
                     model.clamp_delays()

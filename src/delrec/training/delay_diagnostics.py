@@ -1,7 +1,7 @@
 """Per-layer delay snapshots and per-minibatch optimizer diagnostics for MEM runs.
 
 Updates pool every parameter and minibatch in a selected epoch (not net epoch
-movement). lr*grad uses the gradient after clipping and the LR before scheduling.
+movement). Raw gradients are captured before clipping, without LR scaling.
 Actual updates include AdamW and delay clamping. Epoch zero has no updates.
 """
 
@@ -36,14 +36,14 @@ class DelayDiagnostics:
     def begin_epoch(self, epoch, final_epoch):
         self.active = epoch == 0 or epoch == final_epoch or epoch % self.every == 0
         self.epoch = epoch
-        self.updates = {name: {'lr_grad': [], 'delta': [], 'missing_grad_steps': 0}
+        self.updates = {name: {'gradient': [], 'delta': [], 'missing_grad_steps': 0}
                         for name, *_ in self.layers}
 
     @torch.no_grad()
-    def before_step(self, optimizer):
+    def before_step(self):
+        """Capture raw gradients and parameters after backward, before clipping."""
         if not self.active:
             return
-        rates = {id(p): float(group['lr']) for group in optimizer.param_groups for p in group['params']}
         self.before = {}
         for name, _, _, parameter in self.layers:
             self.before[name] = parameter.detach().clone()
@@ -51,7 +51,7 @@ class DelayDiagnostics:
             if parameter.grad is None:
                 record['missing_grad_steps'] += 1
             else:
-                record['lr_grad'].append(self._array(parameter.grad * rates.get(id(parameter), 0.0)))
+                record['gradient'].append(self._array(parameter.grad))
 
     @torch.no_grad()
     def after_step(self):
@@ -81,11 +81,11 @@ class DelayDiagnostics:
                 effective = module.left_padding - (module.dilated_kernel_size[0] - 1) / 2 - effective
             record = self.updates[name]
             values = {'parameter': self._array(parameter), 'effective_delay': self._array(effective)}
-            for key in ('lr_grad', 'delta'):
+            for key in ('gradient', 'delta'):
                 values[key] = np.concatenate(record[key]) if record[key] else np.array([], dtype=np.float32)
             summary[name] = {'missing_grad_steps': record['missing_grad_steps']}
             titles = ('Learned P (DCLS position)' if attribute == 'P' else 'Learned recurrent delay',
-                      'Effective delay (timesteps)', '|LR × gradient| (after clipping)',
+                      'Effective delay (timesteps)', '|Gradient| (before clipping)',
                       '|Actual step| (after clamping)')
             for ax, (key, value), title in zip(row, values.items(), titles):
                 arrays[f'{name}/{key}'] = value
@@ -95,10 +95,10 @@ class DelayDiagnostics:
                     stats.update(mean=float(finite.mean()), std=float(finite.std()),
                                  mean_abs=float(np.abs(finite).mean()), max_abs=float(np.abs(finite).max()),
                                  zero_fraction=float((finite == 0).mean()))
-                    plotted = np.abs(finite) if key in ('lr_grad', 'delta') else finite
-                    bins = 50 if key in ('lr_grad', 'delta') else int(np.ceil(np.sqrt(plotted.size)))
+                    plotted = np.abs(finite) if key in ('gradient', 'delta') else finite
+                    bins = 50 if key in ('gradient', 'delta') else int(np.ceil(np.sqrt(plotted.size)))
                     ax.hist(plotted, bins=bins)
-                    if key in ('lr_grad', 'delta'):
+                    if key in ('gradient', 'delta'):
                         ax.set_yscale('log')
                     ax.text(.98, .97, f"zero: {stats['zero_fraction']:.1%}\nmean |x|: {stats['mean_abs']:.3g}",
                             transform=ax.transAxes, ha='right', va='top', fontsize=8)
